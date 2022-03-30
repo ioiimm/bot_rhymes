@@ -7,7 +7,18 @@ from find_rhyme import *
 from collections import defaultdict
 import flask
 
-bot = telebot.TeleBot(conf.TOKEN, threaded=False)
+WEBHOOK_URL_BASE = "https://{}:{}".format(conf.WEBHOOK_HOST, conf.WEBHOOK_PORT)
+WEBHOOK_URL_PATH = "/{}/".format(conf.TOKEN)
+
+bot = telebot.TeleBot(conf.TOKEN, threaded=False)  # бесплатный аккаунт pythonanywhere запрещает работу с несколькими тредами
+
+# удаляем предыдущие вебхуки, если они были
+bot.remove_webhook()
+
+# ставим новый вебхук = Слышь, если кто мне напишет, стукни сюда — url
+bot.set_webhook(url=WEBHOOK_URL_BASE+WEBHOOK_URL_PATH)
+
+app = flask.Flask(__name__)
 
 inf_poem = defaultdict(str)
 
@@ -70,8 +81,20 @@ def rhymef(message):
             bot.send_message(message.chat.id,
                              'Прости, кажется, у нас нет для тебя рифмы!\nПопробуй написать что-нибудь еще.')
 
-if __name__ == '__main__':
-    import os
-    app.debug = True
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+            
+# пустая главная страничка для проверки
+@app.route('/', methods=['GET', 'HEAD'])
+def index():
+    return 'ok'
+
+
+# обрабатываем вызовы вебхука = функция, которая запускается, когда к нам постучался телеграм 
+@app.route(WEBHOOK_URL_PATH, methods=['POST'])
+def webhook():
+    if flask.request.headers.get('content-type') == 'application/json':
+        json_string = flask.request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return ''
+    else:
+        flask.abort(403)
